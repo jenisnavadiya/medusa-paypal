@@ -16,7 +16,7 @@ import {
   FulfillmentType,
 } from "@paypal/paypal-server-sdk";
 import { CartAddressDTO, CartLineItemDTO } from "@medusajs/framework/types";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { parsePhoneNumberFromString, CountryCode } from "libphonenumber-js";
 import { AlphabitePaypalPluginOptionsType } from "../service";
 import { MedusaError } from "@medusajs/framework/utils";
 
@@ -90,7 +90,7 @@ export class PaypalService {
   async getAccessToken(): Promise<string> {
     try {
       const authorization = Buffer.from(
-        `${this.clientId}:${this.clientSecret}`
+        `${this.clientId}:${this.clientSecret}`,
       ).toString("base64");
 
       const authRes = await this.authController.requestToken({
@@ -139,6 +139,11 @@ export class PaypalService {
     const createdOrder = await ordersController.createOrder({
       body: {
         intent: CheckoutPaymentIntent.Capture,
+        payer: {
+          ...(email && {
+            emailAddress: email,
+          }),
+        },
         purchaseUnits: [
           {
             amount: {
@@ -222,7 +227,7 @@ export class PaypalService {
     if (!this.webhookId) {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
-        "Webhook ID is not set"
+        "Webhook ID is not set",
       );
     }
 
@@ -245,12 +250,12 @@ export class PaypalService {
           webhook_id: this.webhookId,
           webhook_event: body,
         }),
-      }
+      },
     );
 
     if (!verifyWebhookRes.ok) {
       throw new Error(
-        `Failed to verify webhook signature: ${verifyWebhookRes.statusText}`
+        `Failed to verify webhook signature: ${verifyWebhookRes.statusText}`,
       );
     }
 
@@ -277,7 +282,12 @@ export class PaypalService {
     }
 
     const parsedPhoneNumber =
-      !!shipping_info?.phone && parsePhoneNumberFromString(shipping_info.phone);
+      !!shipping_info?.phone &&
+      !!shipping_info?.country_code &&
+      parsePhoneNumberFromString(
+        shipping_info.phone,
+        shipping_info.country_code.toUpperCase() as CountryCode,
+      );
 
     return {
       name: {
@@ -294,7 +304,7 @@ export class PaypalService {
   }
 
   private mapShippingData(
-    shipping_info: PaypalCreateOrderInput["shipping_info"]
+    shipping_info: PaypalCreateOrderInput["shipping_info"],
   ): Pick<ShippingDetails, "address"> | undefined {
     if (
       !this.includeShippingData ||
